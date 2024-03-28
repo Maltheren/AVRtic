@@ -1,7 +1,15 @@
 #include<Arduino.h>
 
 
+//nogle slemme ASM hacks
+#define RET()  __asm__ __volatile__ ("ret" ::)
+
+
+
 #define maxJobQueue 8
+
+
+
 
 /*
  * En meget crap måde at styre konkurrente systemer på i arduino.... ja FUck siger jeg bare
@@ -21,7 +29,10 @@ class Job{
     //alt opgøres i ticks.. ahah
     uint16_t D_r; //relative deadline
     uint8_t ID;
-    Job(void (*function)()); //constructors
+    char* stakPointer;
+    char* stak;
+    
+    Job(void (*function)(), const int stakSize); //constructors
     Job();
     void append(Job *input);
 };
@@ -48,3 +59,9 @@ void QueueJob_INT(Job* input, uint16_t D_r);
 *@param T Perioden for hvornår funktionen skal gentages 
 */
 void QueueTimedJob(Job* input, uint16_t D_r, uint16_t T);
+
+
+
+//Currently functions under test
+extern Job* TestJob;
+void ExcecuteContained();

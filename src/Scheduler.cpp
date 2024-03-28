@@ -2,6 +2,42 @@
 #include <AVRTIC.h>
 #include <WreckRegs.h>
 
+namespace executionQueue{ //den nøjervigtige kø
+    uint16_t timeSinceShift = 0;
+    Job* Head;
+    uint16_t idleStackPointer;
+}
+
+
+
+//Tvinger processoren til at skifte til et andet job
+Job* TestJob;
+
+//sætter stackpointeren så den er self contained
+void __attribute__((naked, noinline)) ExcecuteContained(){
+    //en vigtig ting her er vist at vi ikke vil have noget pushet i stak når vi roder med den... så vi prøer lige det her
+    PUSHREGS();
+    cli();
+    executionQueue::idleStackPointer = SP;
+    SP = (uint16_t)TestJob->stakPointer; //banker en ny stakpointer ind...
+    sei();
+    TestJob->func();
+    cli();//gør vi er sikre på ikke at blive afbrudt mens vi skifter stack
+    SP = executionQueue::idleStackPointer;
+    sei();
+    POPREGS();
+    RET(); //kører return
+}
+
+
+void ChangeJob(){
+
+}
+
+
+
+
+
 
 
 /*
@@ -21,10 +57,7 @@ void SetupPriorityUpdater(uint8_t prescaler, uint8_t compareMatch){
 }
 
 
-namespace executionQueue{ //den nøjervigtige kø
-    uint16_t timeSinceShift = 0;
-    Job* Head;
-}
+
 
 struct TimerQueueElement{
 
@@ -36,7 +69,7 @@ struct TimerQueueElement{
 
 //idle job til når cpu'en idler
 void idleFunction();
-Job idle(idleFunction);
+Job idle(idleFunction, 100);
 
 /*************************************
  * Funktion til når systemet er idle
@@ -64,11 +97,18 @@ __attribute__((weak)) void breakout(){
 
 ISR(TIMER2_COMPA_vect){ //Opdaterer køøøen
     debugPCHIGH(0);
+    
+    
+    
+    
     Job *current = executionQueue::Head;
     while(current != &idle){
         current->D_r -= 1;
         current = current->next;
     }
+
+
+
     debugPCLOW(0);
 }
 

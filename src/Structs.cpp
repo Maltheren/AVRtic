@@ -1,11 +1,12 @@
 #include<AVRTIC.h>
 int JobIndex = 0;
 
-Job::Job(void (*function)()){
+Job::Job(void (*function)(), const int stakSize){
     ID = JobIndex;
     JobIndex++;
     func = function;
-    
+    stak = new char[stakSize]; //åhhh kriminelt... men det kun i konstructoren. vi allokerer stak i den størrelse vi nu skal bruge 
+    stakPointer = &stak[stakSize];
     
 }
 
