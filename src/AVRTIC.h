@@ -3,7 +3,9 @@
 
 //nogle slemme ASM hacks
 #define RET()  __asm__ __volatile__ ("ret" ::)
-
+#define RETI() __asm__ __volatile__("reti" ::)
+#define POP() __asm__ __volatile__("POP" ::)
+#define PUSH() __asm__ __volatile__("PUSH" ::)
 
 
 #define maxJobQueue 8
@@ -29,7 +31,7 @@ class Job{
     //alt opgøres i ticks.. ahah
     uint16_t D_r; //relative deadline
     uint8_t ID;
-    char* stakPointer;
+    uint16_t stakPointer;
     char* stak;
     
     Job(void (*function)(), const int stakSize); //constructors
@@ -64,4 +66,4 @@ void QueueTimedJob(Job* input, uint16_t D_r, uint16_t T);
 
 //Currently functions under test
 extern Job* TestJob;
-void ExcecuteContained();
+void ExcecuteContained(Job* input);

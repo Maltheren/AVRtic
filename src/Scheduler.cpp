@@ -6,33 +6,10 @@ namespace executionQueue{ //den nøjervigtige kø
     uint16_t timeSinceShift = 0;
     Job* Head;
     uint16_t idleStackPointer;
+    bool jobShiftFlag = 0;
+    Job* CurrentExe;
 }
 
-
-
-//Tvinger processoren til at skifte til et andet job
-Job* TestJob;
-
-//sætter stackpointeren så den er self contained
-void __attribute__((naked, noinline)) ExcecuteContained(){
-    //en vigtig ting her er vist at vi ikke vil have noget pushet i stak når vi roder med den... så vi prøer lige det her
-    PUSHREGS();
-    cli();
-    executionQueue::idleStackPointer = SP;
-    SP = (uint16_t)TestJob->stakPointer; //banker en ny stakpointer ind...
-    sei();
-    TestJob->func();
-    cli();//gør vi er sikre på ikke at blive afbrudt mens vi skifter stack
-    SP = executionQueue::idleStackPointer;
-    sei();
-    POPREGS();
-    RET(); //kører return
-}
-
-
-void ChangeJob(){
-
-}
 
 
 
@@ -57,14 +34,50 @@ void SetupPriorityUpdater(uint8_t prescaler, uint8_t compareMatch){
 }
 
 
+//Tvinger processoren til at skifte til et andet job
+Job* TestJob;
+
+//sætter stackpointeren så den er self contained
+void __attribute__((naked, noinline)) ExcecuteContained(Job* input){
+    //en vigtig ting her er vist at vi ikke vil have noget pushet i stak når vi roder med den... så vi prøer lige det her
+    PUSHREGS();
+    cli(); //skifter til containeren for vores job kan man sige..
+    executionQueue::idleStackPointer = SP;
+    SP = input->stakPointer; //banker en ny stakpointer ind...
+    sei();
+    input->func();
+    cli();//gør vi er sikre på ikke at blive afbrudt mens vi skifter stack
+    SP = executionQueue::idleStackPointer;
+    sei();
+    POPREGS();
+    RET(); //kører return
+}
 
 
-struct TimerQueueElement{
+/// @brief Skal kaldes i slutningen af en interrupt. fordi vi skal vide hvor mange ting der er tilbage i stacken.
+/// @param input Job der skal interruptes med.
+void __attribute__((naked, noinline)) interruptJob(){
+    //Der skulle gerne kun være 2 ting tilbage i stack lige nu, som er retur addressen for en kaldefunktion og returaddresen for denne funtion.
 
 
-};
+    PUSHREGS(); //kopierer alle værdier til stacken.
+    executionQueue::CurrentExe->stakPointer = SP; //kopirer hvor hans stackpointer var
+    SP = (uint16_t)executionQueue::Head->stakPointer; //hapser vores nye jobs stackpointer ind i stedet
+    
+    //@TODO FIXXXXXXXXXXX
 
 
+    
+    uint16_t voresReturn = *(uint16_t*)SP; //NEJ FUCKFUCKFUCKFUCKFUCKFUCK
+    RET();
+}
+
+void QueueChange(Job* input){
+    //forbereder køen
+    input->next = executionQueue::Head;
+    executionQueue::Head = input;
+    executionQueue::jobShiftFlag = 1;
+}
 
 
 //idle job til når cpu'en idler
@@ -77,8 +90,6 @@ Job idle(idleFunction, 100);
 */
 void idleFunction(){
 
-
-
 }
 
 
@@ -89,7 +100,6 @@ __attribute__((weak)) void breakout(){
     else{
         debugPCLOW(0);
     }
-
 }
 
 
@@ -97,18 +107,11 @@ __attribute__((weak)) void breakout(){
 
 ISR(TIMER2_COMPA_vect){ //Opdaterer køøøen
     debugPCHIGH(0);
-    
-    
-    
-    
     Job *current = executionQueue::Head;
     while(current != &idle){
         current->D_r -= 1;
         current = current->next;
     }
-
-
-
     debugPCLOW(0);
 }
 

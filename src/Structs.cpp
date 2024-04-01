@@ -6,7 +6,7 @@ Job::Job(void (*function)(), const int stakSize){
     JobIndex++;
     func = function;
     stak = new char[stakSize]; //åhhh kriminelt... men det kun i konstructoren. vi allokerer stak i den størrelse vi nu skal bruge 
-    stakPointer = &stak[stakSize];
+    stakPointer = (uint16_t)&stak[stakSize]; //vi gemmer hvor vores stack den må starte i memory. fordi stackpointeren tæller ned fra det her tal.
     
 }
 
