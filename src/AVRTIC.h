@@ -1,5 +1,5 @@
 #include<Arduino.h>
-
+#include<MemoryDumper.h>
 
 //nogle slemme ASM hacks
 #define RET()  __asm__ __volatile__ ("ret" ::)
@@ -33,14 +33,21 @@ class Job{
     uint8_t ID;
     uint16_t stakPointer;
     char* stak;
-    
     Job(void (*function)(), const int stakSize); //constructors
     Job();
     void append(Job *input);
 };
 
+/**
+ * @brief Sætter køen op så den stopper på idle
+ * 
+ */
+void AVRTIC_prepare();
 
-//starter AVRTIC
+/**
+ * @brief Starter AVRTIC, betragt det som at starte et while(1) loop alt skal håndteres i tasks herfra
+ * 
+ */
 void AVRTIC_start();
 
 
@@ -54,16 +61,28 @@ void QueueJob(Job* input, uint16_t D_r);
 //Queuer job med en deadline men til interrupts så den ikke fucker global interrupts op
 void QueueJob_INT(Job* input, uint16_t D_r);
 
-/*
-*Sætter funktionen i kø hver given periode i ticks.
-*@param input Job der skal sættes i queue
-*@param D_r Den relative deadline i forhold til starttidspunktet
-*@param T Perioden for hvornår funktionen skal gentages 
-*/
+/**
+ * @brief Sætter et job i en uendelig kø, så det automatisk bliver queued for hver given periode
+ * @param input Jobbet der queues
+ * @param D_r Den realtive deadline
+ * @param T Perioden der gives en semaphor til jobbet
+ */
 void QueueTimedJob(Job* input, uint16_t D_r, uint16_t T);
 
+
+/**
+ * @brief Testfunktion tvinger en anden funktion foran i køen
+ * 
+ * @param input 
+ */
+void QueueChange(Job* input);
 
 
 //Currently functions under test
 extern Job* TestJob;
+/**
+ * @brief Kører et job med sin egen stack
+ * 
+ * @param input Jobbet der skal queues
+ */
 void ExcecuteContained(Job* input);

@@ -2,7 +2,13 @@
 #include <AVRTIC.h>
 #include <WreckRegs.h>
 
-namespace executionQueue{ //den nøjervigtige kø
+
+
+/**
+ * @brief Mest for at undgå rod og globale variabler, indeholder alle brugsvariabler der deles mellem structs og funktioner i AVRtic
+ * 
+ */
+namespace executionQueue{
     uint16_t timeSinceShift = 0;
     Job* Head;
     uint16_t idleStackPointer;
@@ -17,7 +23,8 @@ namespace executionQueue{ //den nøjervigtige kø
 
 
 
-/*
+/**
+* @brief Sætter timeren der skal køre alt det her op
 * @param Prescaler som siger hvor tit tælleren må inkrementeres, 
 *   0 = stoppet, 1 = 1, 2 = 8, 3 = 64, 4 = 256, 5 = 1024,  
 *
@@ -30,7 +37,6 @@ void SetupPriorityUpdater(uint8_t prescaler, uint8_t compareMatch){
     OCR2A = compareMatch; //hvor mange ticks der går før vi skal nulstille registret og køre en interrupt
     TIMSK2 = B00000010; //gør så vi kun kører på OCR0A
     TIFR2 = B00000111; //slukker de 3 flag så vi er sikre på vi ikke bare starter en interrupt
- 
 }
 
 
@@ -53,30 +59,18 @@ void __attribute__((naked, noinline)) ExcecuteContained(Job* input){
     RET(); //kører return
 }
 
-
-/// @brief Skal kaldes i slutningen af en interrupt. fordi vi skal vide hvor mange ting der er tilbage i stacken.
-/// @param input Job der skal interruptes med.
+/**
+* Kører interrupt og gemmer alt CPU'en var igang
+* 
+*/
 void __attribute__((naked, noinline)) interruptJob(){
     //Der skulle gerne kun være 2 ting tilbage i stack lige nu, som er retur addressen for en kaldefunktion og returaddresen for denne funtion.
-
-
     PUSHREGS(); //kopierer alle værdier til stacken.
     executionQueue::CurrentExe->stakPointer = SP; //kopirer hvor hans stackpointer var
     SP = (uint16_t)executionQueue::Head->stakPointer; //hapser vores nye jobs stackpointer ind i stedet
-    
-    //@TODO FIXXXXXXXXXXX
-
-
-    
-    uint16_t voresReturn = *(uint16_t*)SP; //NEJ FUCKFUCKFUCKFUCKFUCKFUCK
+    //? Han tager simpelthen bare og accepterer vi er i en breakout i stedet for at prøve at skjule det.... makes sense
+    POPREGS();
     RET();
-}
-
-void QueueChange(Job* input){
-    //forbereder køen
-    input->next = executionQueue::Head;
-    executionQueue::Head = input;
-    executionQueue::jobShiftFlag = 1;
 }
 
 
@@ -89,7 +83,7 @@ Job idle(idleFunction, 100);
  * ***********************************
 */
 void idleFunction(){
-
+    idle.D_r = 0x0FFF;
 }
 
 
@@ -120,36 +114,73 @@ ISR(TIMER2_COMPA_vect){ //Opdaterer køøøen
 void QueueJob_INT(Job *input, uint16_t D_r){
     input->D_r = D_r;
     Job *current = executionQueue::Head;
-    while((current->next)->D_r <= input->D_r){
+    if(current == &idle){
+        if(current->next == &idle){
+            current->append(input);
+            return;
+        }
+    }
+    if(current->D_r > input->D_r){
+        //Ohshit vi er nødt til at skifte job
+        input->next = executionQueue::Head;
+        executionQueue::Head = input;
+        Serial.println("CChange");
+        interruptJob();
+        return;
+    }
+    
+    while((current->next)->D_r <= input->D_r){ //!runway
         current = current->next; //hopper til den næste
     }
-    current->append(input);
+    current->append(input); //plopper ham ind når han møder en der har en større deadline end ham selv
 }
 
 void QueueJob(Job *input, uint16_t D_r){
-    cli();
+    Serial.print("Queuing: ");
+    Serial.println(SP, HEX);
+    delay(10);
     QueueJob_INT(input, D_r);
-    sei();
+}
+
+
+void DumpQueue(){
+    Job* current = executionQueue::Head;
+    Serial.print("IDLEPOINTER: ");
+    Serial.println((uint16_t)&idle, HEX);
+    Serial.println("QUEUE:");
+    int i = 0;
+    while(current->next != &idle){
+        Serial.print(i);
+        Serial.print(": \t");
+        Serial.println((uint16_t)&current, HEX);
+        i++;
+        current = current->next;
+    }
+}
+
+void AVRTIC_prepare(){
+    idle.D_r = 0x0000;
+    executionQueue::Head = &idle;
+    idle.next = &idle;
 }
 
 void AVRTIC_start(){
     cli();
-    
     SetupPriorityUpdater(3, 100);
-    idle.D_r = 0xFFFF;
-    executionQueue::Head = &idle;
-    idle.next = &idle;
-    sei();
 
+
+    sei();
+    Serial.println("setup the queue going into loop");
+    DumpQueue();
     while (true)
     {   
         cli();
-        if(executionQueue::Head->next == &idle){
+        if(executionQueue::Head->next == &idle){ //backstopper
             idle.next = &idle; 
         }
         sei();
-        //breakout();
-        executionQueue::Head->func(); //kører funktionen
+        executionQueue::CurrentExe = executionQueue::Head; //sætter den aktuelle 
+        ExcecuteContained(executionQueue::CurrentExe); //funktionen med sin egen stack
         executionQueue::Head = executionQueue::Head->next; //tar næste
         
     }
